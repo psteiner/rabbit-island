@@ -17,7 +17,7 @@ var meadowStates = ["#9b7858","#999999","#219923"];
 
 var meadows = [];
 
-// initialize the meadow object
+// initialize the meadow objects
 //
 for (var c = 0; c < meadowColumnCount; c++) {
     meadows[c] = [];
@@ -30,6 +30,9 @@ for (var c = 0; c < meadowColumnCount; c++) {
     }
 }
 
+var cycles = 0;
+var cyclesPerDay = 60;
+
 function draw() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -37,7 +40,12 @@ function draw() {
     drawMeadow();
     drawDays();
     updateIsland();
-    days++;
+
+    if (++cycles > cyclesPerDay) {
+        days++;
+        cycles = 0;
+    }
+
 
     requestAnimationFrame(draw);
 }
