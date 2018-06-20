@@ -14,19 +14,22 @@ var meadowWidth = 50;
 var meadowHeight = 50;
 var meadowOffsetLeft = (canvas.width - meadowRowCount * meadowWidth) / 2;
 var meadowOffsetTop = (canvas.height - meadowColumnCount * meadowHeight) / 2;
-
-//    forest: "#146357",
-// lava: "#FF7905",
-
-var meadowStates = [
-    "#666666", // rock
-    "#9b7858", // soil
-    "#219923", // grass
-]
-
-// "#71cbff", // water
+var meadowStates = {
+    water: '#3355FF',
+    lava: '#ff4400',
+    rock: '#999999',
+    soil: '#9b7858',
+    grass: '#229922',
+};
 
 
+var meadowStatesIndexed = [
+    { lava: '#ff4400' },
+    { rock: '#999999' },
+    { soil: '#9b7858' },
+    { grass: '#229922' },
+    { water: '#3355FF' }
+];
 var meadows = [];
 
 // initialize the meadow objects
@@ -37,8 +40,7 @@ for (var c = 0; c < meadowColumnCount; c++) {
         meadows[c][r] = {
             x: 0,
             y: 0,
-            state: 0,
-            age: 0
+            state: 'water'
         };
     }
 }
@@ -58,7 +60,6 @@ function draw() {
         updateIsland();
         cycles = 0;
     }
-
 
     requestAnimationFrame(draw);
 }
@@ -89,6 +90,7 @@ function updateIsland() {
     for (var c = 0; c < meadowColumnCount; c++) {
         for (var r = 0; r < meadowRowCount; r++) {
             var meadow = meadows[c][r];
+            
 
             // update each meadow
             meadow.age++;
