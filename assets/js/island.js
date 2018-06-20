@@ -110,7 +110,7 @@ function updateIsland() {
             }
 
             // random reset back to lava!
-            if (getRandomInt(1000) == 0) {
+            if (getRandomInt(2048) == 0) {
                 meadow.state = 1;
                 meadow.reset = 1;
             }
