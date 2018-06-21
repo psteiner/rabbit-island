@@ -3,47 +3,32 @@ var canvas = document.getElementById("myCanvas");
 var ctx = canvas.getContext("2d");
 var days = 0;
 
-// meadows
-var meadowRowCount = 20;
-var meadowColumnCount = 20;
-var meadowPadding = 1;
-var meadowWidth = 30;
-var meadowHeight = 30;
-var meadowOffsetLeft = (canvas.width - meadowRowCount * meadowWidth) / 2;
-var meadowOffsetTop = (canvas.height - meadowColumnCount * meadowHeight) / 2;
-// var meadowStates = {
-//     water: '#3355FF',
-//     lava: '#ff4400',
-//     rock: '#999999',
-//     soil: '#9b7858',
-//     grass: '#229922',
-// };
+// cels
+var celRows = 20;
+var celCols = 20;
+var celPadding = 1;
+var celWidth = 30;
+var celHeight = 30;
+var celOffsetLeft = (canvas.width - celRows * celWidth) / 2;
+var celOffsetTop = (canvas.height - celCols * celHeight) / 2;
 
-// var meadowStatesIndexed = [
-//     { lava: '#ff4400' },
-//     { rock: '#999999' },
-//     { soil: '#9b7858' },
-//     { grass: '#229922' },
-//     { water: '#3355FF' }
-// ];
+//               ocean,     steam,     lava,      rock,      soil,      grass,     lake
+var celStates = [{ ocean: "#3355FF" }, { steam: "#FFFFFF" }, { lava: "#ff4400" }, { rock: "#999999" }, { soil: "#9b7858" }, { grass: "#229922" }, { lake: "7fddff" }];
 
-//                   water,    lava,     rock,     soil,     grass
-var meadowStates = ["#3355FF","#ff4400","#999999","#9b7858","#229922"];
+var cels = [];
 
-var meadows = [];
-
-// initialize the meadow objects
+// initialize the cel objects
 //
-for (var c = 0; c < meadowColumnCount; c++) {
-    meadows[c] = [];
-    for (var r = 0; r < meadowRowCount; r++) {
-        meadows[c][r] = {
+for (var c = 0; c < celCols; c++) {
+    cels[c] = [];
+    for (var r = 0; r < celRows; r++) {
+        cels[c][r] = {
             x: 0,
             y: 0,
-            state: 0,
+            state: celStates[1].grass,
             age: 0,
-            factor: 0,
-            reset: 0
+            update: 0,
+            burnit: 0
         };
     }
 }
@@ -55,7 +40,7 @@ function draw() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    drawMeadow();
+    drawIsland();
     drawDays();
 
     if (++cycles > cyclesPerDay) {
@@ -67,52 +52,57 @@ function draw() {
     requestAnimationFrame(draw);
 }
 
-function drawMeadow() {
-    for (var c = 0; c < meadowColumnCount; c++) {
-        for (var r = 0; r < meadowRowCount; r++) {
-            var meadow = meadows[c][r];
+function drawIsland() {
+    for (var c = 0; c < celCols; c++) {
+        for (var r = 0; r < celRows; r++) {
+            var cel = cels[c][r];
 
-            meadow.x = (c * (meadowWidth + meadowPadding)) + meadowOffsetLeft;
-            meadow.y = (r * (meadowHeight + meadowPadding)) + meadowOffsetTop;
+            cel.x = (c * (celWidth + celPadding)) + celOffsetLeft;
+            cel.y = (r * (celHeight + celPadding)) + celOffsetTop;
             ctx.beginPath();
-            ctx.rect(meadow.x, meadow.y, meadowWidth, meadowHeight);
-            ctx.fillStyle = meadowStates[meadow.state];
+            ctx.rect(cel.x, cel.y, celWidth, celHeight);
+            ctx.fillStyle = celStates[cel.state];
             ctx.fill();
             ctx.closePath();
             // ctx.font = "8pt Arial";
             // ctx.fillStyle = "black";
-            // ctx.fillText("s:" + meadow.state + " f:" + meadow.factor, 
-            //     meadow.x + 2, meadow.y + 20);
-            if ( meadow.reset == 1 ) {
+            // ctx.fillText("s:" + cel.state + " f:" + cel.factor,
+            //     cel.x + 2, cel.y + 20);
+            if (cel.burnit == 1) {
                 ctx.font = "12pt Arial";
                 ctx.fillStyle = "yellow";
-                ctx.fillText("!!!",meadow.x + 10, meadow.y + 20);
+                ctx.fillText("!!!", cel.x + 10, cel.y + 20);
             }
         }
     }
 }
 
 function updateIsland() {
-    var states = meadowStates.length - 1;
-    for (var c = 0; c < meadowColumnCount; c++) {
-        for (var r = 0; r < meadowRowCount; r++) {
-            
-            var meadow = meadows[c][r];
-            meadow.reset = 0;
-            meadow.age++;
-            
-            meadow.factor = getRandomInt(293);
+    var states = celStates.length - 1;
+    for (var c = 0; c < celCols; c++) {
+        for (var r = 0; r < celRows; r++) {
 
-            var updateState = (meadow.age % meadow.factor) == 0;
+            var cel = cels[c][r];
+            cel.burnit = 0;
+            cel.age++;
 
-            if (updateState && meadow.state < states) {
-                meadow.state++;
+            cel.update = cel.age % getRandomInt(293) == 0;
+
+            // progress cell state from ocean to grass
+            //
+            if (cel.update && cel.state < states - 1) {
+                cel.state++;
             }
 
-            // random reset back to lava!
+            // random lava outbreak!
             if (getRandomInt(2048) == 0) {
-                meadow.state = 1;
-                meadow.reset = 1;
+                cel.state = 1;
+                cel.burnit = 1;
+            }
+
+            // random lake!
+            if (getRandomInt(2048) == 3) {
+                cel.state = states;
             }
         }
     }
@@ -126,6 +116,11 @@ function drawDays() {
     ctx.font = "16pt Arial";
     ctx.fillStyle = "black";
     ctx.fillText("Days: " + days, 10, canvas.height - 30);
+}
+
+// https://stackoverflow.com/questions/2035522/get-adjacent-elements-in-a-two-dimensional-array
+function getNeighbours(cel) {
+
 }
 
 draw();
