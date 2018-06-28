@@ -4,22 +4,13 @@ var ctx = canvas.getContext("2d");
 var days = 0;
 
 // cels
-var celRows = 30;
-var celCols = 30;
+var celRows = 25;
+var celCols = 25;
 var celPadding = 1;
 var celWidth = 20;
 var celHeight = 20;
 var celOffsetLeft = (canvas.width - celRows * celWidth) / 2;
 var celOffsetTop = (canvas.height - celCols * celHeight) / 2;
-
-//               0: ocean,  1: steam,  2: lava,   3: rock,   4: soil,   5: grass,  6: fire,   7:  lake
-
-// const ocean = 0;
-// const rock = 1;
-// const soil = 2;
-// const grass = 3;
-// const fire = 4;
-// const lake = 5;
 
 const states = { 
     ocean: "#3355FF", 
@@ -29,8 +20,6 @@ const states = {
     soil: "#9B7858",
     grass: "#229922",
 };
-
-// const states = ["#3355FF", "#999999", "#9B7858", "#229922", "#FF4400", "#7FDDFF"];
 
 // initialize the island map
 //
@@ -46,7 +35,8 @@ for (var c = 0; c < celCols; c++) {
             state: states.ocean,
             update: false,
             age: 0,
-            daysBurning: 0
+            daysBurning: 0,
+            moisture: 10
         };
     }
 }
@@ -54,12 +44,21 @@ for (var c = 0; c < celCols; c++) {
 var cycles = 0;
 const cyclesPerDay = 1;
 var generatingMap = true;
+var daysWithoutRain = 0;
+var maxDaysWithoutRain = 0;
+var avgDaysWithoutRain = 0;
+var totalDaysWithoutRain = 0;
+
+var daysWithRain = 0;
+var maxDaysWithRain = 0;
+var avgDaysWithRain = 0;
+var totalDaysWithRain = 0;
 
 function run() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     drawIsland();
-    drawDays();
+    drawLegend();
 
     if (++cycles > cyclesPerDay) {
         ++days;
@@ -68,21 +67,54 @@ function run() {
         {
             generatingMap = generateMap();
         }
+
+        if (getRandomInt(33) % 2 == 0 ) {
+            daysWithRain++;
+            totalDaysWithRain++;
+            avgDaysWithRain = (totalDaysWithRain / days).toFixed(2);
+            if (daysWithRain > maxDaysWithRain) {
+                maxDaysWithRain = daysWithRain;
+            }
+
+            // reset days without rain
+            daysWithoutRain = 0;
+        }
+        else {
+            daysWithoutRain++;
+            totalDaysWithoutRain++;
+            avgDaysWithoutRain = (totalDaysWithoutRain / days).toFixed(2);
+            if (daysWithoutRain > maxDaysWithoutRain) {
+                maxDaysWithoutRain = daysWithoutRain;
+            }
+            // reset days with rain
+            daysWithRain = 0;
+        }
+
         updateIsland();
         cycles = 0;
     }
-
     requestAnimationFrame(run);
 }
 
+
+function Animal() {
+    this.age = 0;
+}
+
+function Rabbit() {
+    this.age = 0;
+    this.alive = true;
+    this.health = 10;
+}
 
 // populates the island map with its initial geography
 // 
 function generateMap() {
     // leave outside border as ocean
     //
-    for (var c = 1; c < celCols - 1; c++) {
-        for (var r = 1; r < celCols - 1; r++) {
+    var oceanBorder = 3;
+    for (var c = oceanBorder; c < celCols - oceanBorder; c++) {
+        for (var r = oceanBorder; r < celCols - oceanBorder; r++) {
 
             // default to grass for now to see if this works or not!
             var cel = cels[c][r].state = states.rock;
@@ -90,11 +122,17 @@ function generateMap() {
     }
 
     return false;
-    // var hotspot = cels[getRandomInt(celCols)][getRandomInt(celRows)];
-    // hotspot.state = fire;
 }
 
+function pauseSim() {
+    var btnRun = document.getElementById("btnRun");
+    var text = btnRun.textContent;
+    btnRun.textContent = "Pause";
+}
 
+function resetSim() {
+    run();
+}
 
 function updateIsland() {
     var factor = 30;
@@ -111,13 +149,13 @@ function updateIsland() {
                 continue;
             }
 
-
             cel.update = cel.age % getRandomInt(factor) == 0;
 
             if (cel.update) {
                 var chance = cel.age % getRandomInt(factor) == 1;
                 var seed = getRandomInt(factor * 8) == 0;
                 var debris = getRandomInt(factor * 8) == 0;
+                cel.moisture--;
 
                 if (debris && cel.state == states.rock) {
                     cel.state = states.soil;
@@ -125,25 +163,19 @@ function updateIsland() {
                 else if (seed && cel.state == states.soil) {
                     cel.state = states.grass;
                 }
-                else if (cel.state == states.grass && chance) {
+                else if (cel.state == states.grass && chance) { 
                     var burnIt = cel.age % getRandomInt(factor * 30) == 0;
                     var waterIt = cel.age % getRandomInt(factor * 30) == 0;
-                    var rabbit = cel.age % getRandomInt(factor * 4) == 0;
-                    if (burnIt) {
+
+                    if (daysWithoutRain > 10 && burnIt) {
                         cel.state = states.fire;
                         cel.daysBurning++;
                     }
-                    else if (waterIt) {
+
+                    if (daysWithRain > 10 && waterIt) {
                         cel.state = states.lake;
                     }
-                    else if (rabbit) {
-                        // TODO: add rabbit
-                        var rabbit = 
-                        cel.rabbit++;
-                    }
-                    else {
-                        cel.state == states.grass;
-                    }
+
                 }
                 else if (cel.state == states.lake && chance) {
                     var grassIt = cel.age % getRandomInt(factor/2) == 0;
@@ -205,11 +237,6 @@ function neighbours(cel, c, r) {
     return neighbours;
 }
 
-function Rabbit() {
-    this.age = 0;
-    this.alive = true;
-    this.health = 10;
-}
 
 function drawIsland() {
     for (var c = 0; c < celCols; c++) {
@@ -238,10 +265,30 @@ function drawIsland() {
     }
 }
 
-function drawDays() {
-    ctx.font = "16pt Arial";
+function drawLegend() {
+    ctx.font = "12pt Consolas";
     ctx.fillStyle = "black";
-    ctx.fillText("Days: " + days, 10, canvas.height - 30);
+
+    ctx.fillText("Days: " + days, 10, canvas.height - 70);
+
+    ctx.fillText("                 avg   | max | total", 10, canvas.height - 50);
+
+
+    var avgOffset = 140;
+    var maxOffset = 200;
+    var totalOffset = 250;
+    var withRainHeight = canvas.height - 30;
+    var withoutRainHeight = canvas.height - 10;
+
+    ctx.fillText("With rain:", 10, canvas.height - 30);
+    ctx.fillText(" | " + avgDaysWithRain, avgOffset, withRainHeight);
+    ctx.fillText(" | " + maxDaysWithRain, maxOffset, withRainHeight);
+    ctx.fillText(" | " + totalDaysWithRain, totalOffset, withRainHeight);
+    
+    ctx.fillText("Without rain:", 10, withoutRainHeight);
+    ctx.fillText(" | " + avgDaysWithoutRain, avgOffset, withoutRainHeight);
+    ctx.fillText(" | " + maxDaysWithoutRain, maxOffset, withoutRainHeight);
+    ctx.fillText(" | " + totalDaysWithoutRain, totalOffset, withoutRainHeight);
 }
 
 // returns an integer between 0 and less than but not including max
