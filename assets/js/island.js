@@ -2,6 +2,11 @@
 var canvas = document.getElementById("myCanvas");
 var ctx = canvas.getContext("2d");
 var days = 0;
+var years = 0;
+var decadalCycle = 10;
+var decadalOscillation = decadalCycle / 2;
+const daysPerYear = 365;
+var isRainySeason = false;
 
 // cels
 var celRows = 25;
@@ -12,14 +17,32 @@ var celHeight = 20;
 var celOffsetLeft = (canvas.width - celRows * celWidth) / 2;
 var celOffsetTop = (canvas.height - celCols * celHeight) / 2;
 
-const states = { 
-    ocean: "#3355FF", 
-    fire: "#FF4400", 
-    lake: "#7FDDFF", 
+var celStats = false;
+var grassCels = 0;
+var maxGrassCels = 0;
+var minGrassCels = celCols * celRows;
+
+const MAX_RABBITS = 8;
+var rabbitPop = 0;
+
+const MAX_FOXES = 2;
+var foxPop = 0;
+
+const states = {
+    ocean: "#3355FF",
+    fire: "#FF4400",
+    lake: "#7FDDFF",
     rock: "#999999",
     soil: "#9B7858",
     grass: "#229922",
+    straw: "#f4ce42"
 };
+
+var cycles = 0;
+const cyclesPerDay = 1;
+var isRunning = true;
+
+var generatingMap = true;
 
 // initialize the island map
 //
@@ -31,80 +54,68 @@ for (var c = 0; c < celCols; c++) {
         cels[c][r] = {
             x: 0,
             y: 0,
-            z: 0,
             state: states.ocean,
-            update: false,
-            age: 0,
             daysBurning: 0,
-            moisture: 10
+            moisture: 100,
+            isHabitable: false, // rock, soil, straw or grass
+            forage: 100, // what rabbits eat
+            rabbits: [],
+            foxes: []
         };
     }
 }
 
-var cycles = 0;
-const cyclesPerDay = 1;
-var generatingMap = true;
-var daysWithoutRain = 0;
-var maxDaysWithoutRain = 0;
-var avgDaysWithoutRain = 0;
-var totalDaysWithoutRain = 0;
+window.onmousedown = function () {
+    isRunning = !isRunning;
+};
 
-var daysWithRain = 0;
-var maxDaysWithRain = 0;
-var avgDaysWithRain = 0;
-var totalDaysWithRain = 0;
+document.addEventListener("keydown", (event) => {
+    switch (event.code) {
+    case "KeyC":
+        celStats = !celStats;
+        break;
+    }
+});
 
 function run() {
+    if (isRunning) {
+        update();
+    }
+    requestAnimationFrame(run);
+}
+
+
+function update() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     drawIsland();
     drawLegend();
 
     if (++cycles > cyclesPerDay) {
-        ++days;
+        // cycle 360 days per year
+        days = days % daysPerYear + 1;
+        if (days == daysPerYear) {
+            years++;
+            if (years % (decadalCycle * 2) < decadalCycle) {
+                // decadalOscillation = years % 10;
+                decadalOscillation--;
+            } else {
+                // decadalOscillation = 10 - years % 10;
+                decadalOscillation++;
+            }
+        }
 
-        while(generatingMap)
-        {
+
+        // decadalOscillation *= 0.1;
+
+        while (generatingMap) {
             generatingMap = generateMap();
         }
 
-        if (getRandomInt(33) % 2 == 0 ) {
-            daysWithRain++;
-            totalDaysWithRain++;
-            avgDaysWithRain = (totalDaysWithRain / days).toFixed(2);
-            if (daysWithRain > maxDaysWithRain) {
-                maxDaysWithRain = daysWithRain;
-            }
-
-            // reset days without rain
-            daysWithoutRain = 0;
-        }
-        else {
-            daysWithoutRain++;
-            totalDaysWithoutRain++;
-            avgDaysWithoutRain = (totalDaysWithoutRain / days).toFixed(2);
-            if (daysWithoutRain > maxDaysWithoutRain) {
-                maxDaysWithoutRain = daysWithoutRain;
-            }
-            // reset days with rain
-            daysWithRain = 0;
-        }
-
         updateIsland();
+
         cycles = 0;
     }
-    requestAnimationFrame(run);
-}
-
-
-function Animal() {
-    this.age = 0;
-}
-
-function Rabbit() {
-    this.age = 0;
-    this.alive = true;
-    this.health = 10;
 }
 
 // populates the island map with its initial geography
@@ -115,92 +126,158 @@ function generateMap() {
     var oceanBorder = 3;
     for (var c = oceanBorder; c < celCols - oceanBorder; c++) {
         for (var r = oceanBorder; r < celCols - oceanBorder; r++) {
-
-            // default to grass for now to see if this works or not!
-            var cel = cels[c][r].state = states.rock;
+            // default to rock for now to see if this works or not!
+            var cel = cels[c][r];
+            cel.state = states.rock;
+            cel.moisture = 0;
         }
     }
-
     return false;
 }
 
-function pauseSim() {
-    var btnRun = document.getElementById("btnRun");
-    var text = btnRun.textContent;
-    btnRun.textContent = "Pause";
+function Rabbit() {
+    this.sex = getRandomInt(2) == 0 ? "male" : "female";
+    this.age = 3;       // dies at age 10
+    this.health = 10;   // dies when 0
+    this.stamina = 10;  // each cel move costs 1 stamina
+    this.hunger = 0;    // eats 1 forage per day
 }
 
-function resetSim() {
-    run();
+function Fox() {
+    this.sex = getRandomInt(2) == 0 ? "male" : "female";
+    this.age = 3;       // dies at age 10
+    this.health = 10;   // dies when 0
+    this.stamina = 10;  // each cel move costs 1 stamina
+    this.hunger = 0;    // eats 1 rabbit every 3 days
 }
+
 
 function updateIsland() {
-    var factor = 30;
-    
+
     for (var c = 0; c < celCols; c++) {
         for (var r = 0; r < celRows; r++) {
 
             var cel = cels[c][r];
-            cel.age++;
 
-            // ocean cels do not change
+            // ocean cels do not change, for now
             // 
             if (cel.state == states.ocean) {
                 continue;
             }
 
-            cel.update = cel.age % getRandomInt(factor) == 0;
 
-            if (cel.update) {
-                var chance = cel.age % getRandomInt(factor) == 1;
-                var seed = getRandomInt(factor * 8) == 0;
-                var debris = getRandomInt(factor * 8) == 0;
-                cel.moisture--;
 
-                if (debris && cel.state == states.rock) {
-                    cel.state = states.soil;
+            // randomize cell updates
+            var skip = getRandomInt(3);
+
+            if (skip == 0) {
+                continue;
+            }
+
+            var weather = getRandomInt(2) == 0;
+
+            if (days < daysPerYear / 2) {
+                isRainySeason = true;
+                if (weather && cel.moisture < 100) {
+                    cel.moisture++;
                 }
-                else if (seed && cel.state == states.soil) {
-                    cel.state = states.grass;
+            } else {
+                isRainySeason = false;
+                if (weather && cel.moisture > 0) {
+                    cel.moisture--;
                 }
-                else if (cel.state == states.grass && chance) { 
-                    var burnIt = cel.age % getRandomInt(factor * 30) == 0;
-                    var waterIt = cel.age % getRandomInt(factor * 30) == 0;
-
-                    if (daysWithoutRain > 10 && burnIt) {
-                        cel.state = states.fire;
-                        cel.daysBurning++;
-                    }
-
-                    if (daysWithRain > 10 && waterIt) {
-                        cel.state = states.lake;
-                    }
-
+                if (grassCels < minGrassCels) {
+                    minGrassCels = grassCels;
                 }
-                else if (cel.state == states.lake && chance) {
-                    var grassIt = cel.age % getRandomInt(factor/2) == 0;
-                    if (grassIt) {
-                        cel.state = states.grass;
-                    }
-                    
-                }
-                else if (cel.state == states.fire) {
-                    if (cel.daysBurning > 2) {
-                        cel.daysBurning = 0;
-                        cel.state = states.rock;
-                    }
-                    else {
-                        // why shouldn't my neighbours burn, too? :)
-                        if (cel.age % getRandomInt(factor * 5) == 0) {
-                            updateMyNeighbours(cel, c, r);
-                        }
-                        cel.daysBurning++;
-                    }
+            }
+            if (grassCels > maxGrassCels) {
+                maxGrassCels = grassCels;
+            }
+
+
+            // chance that a seed lands on a cell
+            //
+            var seed = getRandomInt(10 + decadalOscillation) == 0;
+
+            // chance that organic debris accumulates on a cell
+            //
+            var debris = getRandomInt(70 + decadalOscillation) == 0;
+
+            
+            // add rabbits
+            if (getRandomInt(100 + decadalOscillation) == 0) {
+                var rabbit = new Rabbit();
+                rabbitPop++;
+
+                if (cel.rabbits.length < MAX_RABBITS && cel.isHabitable) {
+                    cel.rabbits.push(rabbit);
                 }
                 else {
-                    // leave the cel unchanged
+                    moveRabbitToNeighbour(rabbit, cel, c, r);
                 }
-                cel.update = false;
+            }
+
+            // add foxes
+            if (getRandomInt(100 + decadalOscillation) == 0) {
+                var fox = new Fox();
+                foxPop++;
+
+                if (cel.foxes.length < MAX_FOXES && cel.isHabitable) {
+                    cel.foxes.push(fox);
+                }
+                else {
+                    moveFoxToNeighbour(fox, cel, c, r);
+                }
+            }
+
+            // default to inhabitable, then set to true for 
+            // rock, soil, straw or grass
+            cel.isHabitable = false;
+            if (cel.state == states.rock && debris) {
+                cel.state = states.soil;
+                cel.isHabitable = true;
+            } else if (cel.state == states.soil && seed && cel.moisture > 25) {
+                grassCels++;
+                cel.state = states.grass;
+                cel.isHabitable = true;
+            } else if (cel.state == states.grass) {
+                if (cel.moisture > 90) {
+                    cel.state = states.lake;
+                    grassCels--;
+                } else if (cel.moisture < 10) {
+                    cel.state = states.straw;
+                    cel.isHabitable = true;
+                    grassCels--;
+                }
+            } else if (cel.state == states.straw) {
+                if (cel.moisture < 5) {
+                    cel.state = states.fire;
+                    cel.moisture = 0;
+                    // aww, the poor animals 
+                    rabbitPop -= cel.rabbits.length + 1;
+                    cel.rabbits.length = 0;
+                    foxPop -= cel.foxes.length + 1;
+                    cel.foxes.length = 0;
+                    cel.daysBurning++;
+                }
+            } else if (cel.state == states.lake) {
+                if (cel.moisture < 50) {
+                    cel.state = states.grass;
+                    cel.isHabitable = true;
+                    grassCels++;
+                }
+            } else if (cel.state == states.fire) {
+                if (cel.daysBurning > 1) {
+                    cel.daysBurning = 0;
+                    cel.state = states.rock;
+                    cel.isHabitable = true;
+                } else {
+                    // why shouldn't my neighbours burn, too? :)
+                    updateMyNeighbours(cel, c, r);
+                    cel.daysBurning++;
+                }
+            } else {
+                // leave the cel unchanged
             }
         }
     }
@@ -209,14 +286,14 @@ function updateIsland() {
 function updateMyNeighbours(cel, c, r) {
 
     var neighbours = [
-        cels[c][r-1],
-        cels[c-1][r],
-        cels[c+1][r],
-        cels[c][r+1],
+        cels[c][r - 1],
+        cels[c - 1][r],
+        cels[c + 1][r],
+        cels[c][r + 1],
     ];
 
-    neighbours.forEach(function(neighbour) {
-        if (neighbour.state == states.grass) {
+    neighbours.forEach(function (neighbour) {
+        if (neighbour.state == states.straw) {
             neighbour.state = states.fire;
         }
     });
@@ -225,7 +302,7 @@ function updateMyNeighbours(cel, c, r) {
 
 // https://stackoverflow.com/questions/652106/finding-neighbours-in-a-two-dimensional-array
 //
-function neighbours(cel, c, r) {
+function getNeighbours(cel, c, r) {
     var neighbours = [];
     for (var cn = Math.max(0, c - 1); cn <= Math.min(c + 1, celCols - 1); cn++) {
         for (var rn = Math.max(0, r - 1); rn <= Math.min(r + 1, celRows - 1); rn++) {
@@ -235,6 +312,34 @@ function neighbours(cel, c, r) {
         }
     }
     return neighbours;
+}
+
+function moveRabbitToNeighbour(rabbit, cel, c, r) {
+    var neighbours = getNeighbours(cel, c, r);
+    var didMove = false;
+
+    neighbours.forEach(function (neighbour) {
+        if (didMove == false && neighbour.rabbits.length < MAX_RABBITS && neighbour.isHabitable) {
+            neighbour.rabbits.push(rabbit);
+            didMove = true;
+        }
+    });
+
+    return didMove;
+}
+
+function moveFoxToNeighbour(fox, cel, c, r) {
+    var neighbours = getNeighbours(cel, c, r);
+    var didMove = false;
+
+    neighbours.forEach(function (neighbour) {
+        if (didMove == false && neighbour.foxes.length < MAX_FOXES && neighbour.isHabitable) {
+            neighbour.foxes.push(fox);
+            didMove = true;
+        }
+    });
+
+    return didMove;
 }
 
 
@@ -250,10 +355,13 @@ function drawIsland() {
             ctx.fillStyle = cel.state;
             ctx.fill();
             ctx.closePath();
-            // ctx.font = "8pt Arial";
-            // ctx.fillStyle = "black";
-            // ctx.fillText("s:" + cel.state + " f:" + cel.factor,
-            //     cel.x + 2, cel.y + 20);
+
+            if (celStats) {
+                ctx.font = "7pt Arial";
+                ctx.fillStyle = "black";
+                ctx.fillText(cel.moisture, cel.x + 4, cel.y + 13);
+            }
+
             if (cel.daysBurning == 1) {
                 ctx.beginPath();
                 ctx.rect(cel.x + 2, cel.y + 2, celWidth - 4, celHeight - 4);
@@ -261,34 +369,43 @@ function drawIsland() {
                 ctx.fill();
                 ctx.closePath();
             }
+
+            if (cel.rabbits.length > 0) {
+                ctx.font = "7pt Arial";
+                ctx.fillStyle = "yellow";
+                ctx.fillText(cel.rabbits.length, cel.x + 2, cel.y + 13);
+            }
+
+            if (cel.foxes.length > 0) {
+                ctx.font = "7pt Arial";
+                ctx.fillStyle = "red";
+                ctx.fillText(cel.foxes.length, cel.x + 10, cel.y + 13);
+            }
         }
     }
 }
 
 function drawLegend() {
-    ctx.font = "12pt Consolas";
+    ctx.font = "10pt Consolas";
     ctx.fillStyle = "black";
-
-    ctx.fillText("Days: " + days, 10, canvas.height - 70);
-
-    ctx.fillText("                 avg   | max | total", 10, canvas.height - 50);
-
-
     var avgOffset = 140;
     var maxOffset = 200;
     var totalOffset = 250;
-    var withRainHeight = canvas.height - 30;
-    var withoutRainHeight = canvas.height - 10;
+    var leading = 14;
+    var line1 = canvas.height - 8;
+    var line2 = line1 - leading;
+    var line3 = line2 - leading;
 
-    ctx.fillText("With rain:", 10, canvas.height - 30);
-    ctx.fillText(" | " + avgDaysWithRain, avgOffset, withRainHeight);
-    ctx.fillText(" | " + maxDaysWithRain, maxOffset, withRainHeight);
-    ctx.fillText(" | " + totalDaysWithRain, totalOffset, withRainHeight);
+    ctx.fillText("Rainy: " + isRainySeason, 400, line3);
+    ctx.fillText("Dec Osc: " + decadalOscillation, 10, line3);
+    ctx.fillText("Curr Grass: " + grassCels, 200, line3);
+
+    ctx.fillText("Days:  " + days, 10, line2);
+    ctx.fillText("Min Grass: " + minGrassCels, 200, line2);
+    ctx.fillText("Rabbits: " + rabbitPop, 400, line2);
     
-    ctx.fillText("Without rain:", 10, withoutRainHeight);
-    ctx.fillText(" | " + avgDaysWithoutRain, avgOffset, withoutRainHeight);
-    ctx.fillText(" | " + maxDaysWithoutRain, maxOffset, withoutRainHeight);
-    ctx.fillText(" | " + totalDaysWithoutRain, totalOffset, withoutRainHeight);
+    ctx.fillText("Years: " + years, 10, line1);
+    ctx.fillText("Max Grass: " + maxGrassCels, 200, line1);
 }
 
 // returns an integer between 0 and less than but not including max
