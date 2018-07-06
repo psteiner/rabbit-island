@@ -54,10 +54,11 @@ for (var c = 0; c < celCols; c++) {
         cels[c][r] = {
             x: 0,
             y: 0,
-            state: states.ocean,
+            state: states.ocean, 
             daysBurning: 0,
             moisture: 100,
             isHabitable: false, // rock, soil, straw or grass
+            isShoreline: false,
             forage: 100, // what rabbits eat
             rabbits: [],
             foxes: []
@@ -108,9 +109,9 @@ function update() {
 
         // decadalOscillation *= 0.1;
 
-        while (generatingMap) {
-            generatingMap = generateMap();
-        }
+        // while (generatingMap) {
+        //     generatingMap = generateMap();
+        // }
 
         updateIsland();
 
@@ -123,17 +124,39 @@ function update() {
 function generateMap() {
     // leave outside border as ocean
     //
-    var oceanBorder = 3;
+    var oceanBorder = 2;
     for (var c = oceanBorder; c < celCols - oceanBorder; c++) {
         for (var r = oceanBorder; r < celCols - oceanBorder; r++) {
-            // default to rock for now to see if this works or not!
             var cel = cels[c][r];
             cel.state = states.rock;
+            cel.c = c;
+            cel.r = r;
             cel.moisture = 0;
         }
     }
+
     return false;
 }
+
+
+function iterateIsland(action) {
+
+    for (var c = 0; c < celCols; c++) {
+        for (var r = 0; r < celRows; r++) {
+
+            var cel = cels[c][r];
+
+            // ocean cels do not change, for now
+            // 
+            if (cel.state == states.ocean) {
+                continue;
+            }
+
+            action(cel);
+        }
+    }
+}
+
 
 function Rabbit() {
     this.sex = getRandomInt(2) == 0 ? "male" : "female";
@@ -213,7 +236,7 @@ function updateIsland() {
                     cel.rabbits.push(rabbit);
                 }
                 else {
-                    moveRabbitToNeighbour(rabbit, cel, c, r);
+                    moveRabbitToNeighbour(rabbit, cel);
                 }
             }
 
@@ -226,7 +249,7 @@ function updateIsland() {
                     cel.foxes.push(fox);
                 }
                 else {
-                    moveFoxToNeighbour(fox, cel, c, r);
+                    moveFoxToNeighbour(fox, cel);
                 }
             }
 
@@ -302,11 +325,12 @@ function updateMyNeighbours(cel, c, r) {
 
 // https://stackoverflow.com/questions/652106/finding-neighbours-in-a-two-dimensional-array
 //
-function getNeighbours(cel, c, r) {
+function getNeighbours(cel) {
     var neighbours = [];
-    for (var cn = Math.max(0, c - 1); cn <= Math.min(c + 1, celCols - 1); cn++) {
-        for (var rn = Math.max(0, r - 1); rn <= Math.min(r + 1, celRows - 1); rn++) {
-            if (cn !== c || rn !== r) {
+
+    for (var cn = Math.max(0, cel.c - 1); cn <= Math.min(cel.c + 1, celCols - 1); cn++) {
+        for (var rn = Math.max(0, cel.r - 1); rn <= Math.min(cel.r + 1, celRows - 1); rn++) {
+            if (cn !== cel.c || rn !== cel.r) {
                 neighbours.push(cels[cn][rn]);
             }
         }
@@ -314,8 +338,8 @@ function getNeighbours(cel, c, r) {
     return neighbours;
 }
 
-function moveRabbitToNeighbour(rabbit, cel, c, r) {
-    var neighbours = getNeighbours(cel, c, r);
+function moveRabbitToNeighbour(rabbit, cel) {
+    var neighbours = getNeighbours(cel);
     var didMove = false;
 
     neighbours.forEach(function (neighbour) {
@@ -328,8 +352,8 @@ function moveRabbitToNeighbour(rabbit, cel, c, r) {
     return didMove;
 }
 
-function moveFoxToNeighbour(fox, cel, c, r) {
-    var neighbours = getNeighbours(cel, c, r);
+function moveFoxToNeighbour(fox, cel) {
+    var neighbours = getNeighbours(cel);
     var didMove = false;
 
     neighbours.forEach(function (neighbour) {
@@ -427,5 +451,19 @@ function getRandomIntMinMax(min, max) {
     return Math.floor(Math.random() * (max - min)) + min;
 }
 
+generateMap();
+
+// identify shoreline cels
+//
+iterateIsland(function(cel) {
+    var neighbours = getNeighbours(cel);
+
+    neighbours.forEach(function (neighbour) {
+        if (neighbour.state == states.ocean) {
+            cel.isShoreline = true;
+        }
+    });
+
+});
 
 run();
