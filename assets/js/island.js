@@ -167,6 +167,9 @@ function iterateIsland(action) {
     sexual maturity: 120 days
     matures: 150 days
     warrens contain 2 to 10 individuals
+
+    Factory Function - 
+    https://www.theodinproject.com/courses/javascript/lessons/factory-functions-and-the-module-pattern
 */
 function Rabbit() {
     this.lifespan = 730;
