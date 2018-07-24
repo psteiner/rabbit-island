@@ -157,15 +157,47 @@ function iterateIsland(action) {
     }
 }
 
-
+/*  European Rabbit - https://en.wikipedia.org/wiki/European_rabbit
+    lifespan: 2 years (730 days)
+    Breeding Season: January to August
+    Reproduction Period: 30 to 50 days
+    litter size: 3 to 7 kittens
+    Gestation Period: 30 days
+    weans: 21 days
+    sexual maturity: 120 days
+    matures: 150 days
+    warrens contain 2 to 10 individuals
+*/
 function Rabbit() {
-    this.sex = getRandomInt(2) == 0 ? "male" : "female";
-    this.age = 3;       // dies at age 10
+    this.lifespan = 730;
+    this.breedingSeasonStart = 0;
+    this.breedingSeasonEnd = 220;
+    this.age = 150;      // arrives on the island as a mature adult
     this.health = 10;   // dies when 0
     this.stamina = 10;  // each cel move costs 1 stamina
     this.hunger = 0;    // eats 1 forage per day
 }
 
+function Buck() {
+    Rabbit.call();
+    this.sex = "male";
+}
+
+function Doe() {
+    Rabbit.call();
+    this.sex = "female";
+    this.isPregnant = false;
+    this.litter = [];
+}
+
+/*  Red Fox - https://en.wikipedia.org/wiki/Red_fox
+    Lifespan: 
+    Reproduction Period: 365 days
+    Breeding Season: Spring
+    Litter Size: 4 to 6
+    Gestation Period: 50 days
+
+*/
 function Fox() {
     this.sex = getRandomInt(2) == 0 ? "male" : "female";
     this.age = 3;       // dies at age 10
